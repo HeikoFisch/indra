@@ -5,7 +5,6 @@ import EventEmitter from "eventemitter3";
 
 import { eventNameToImplementation, methodNameToImplementation } from "./methods";
 import { ProtocolRunner } from "./machine";
-import ProcessQueue from "./process-queue";
 import RpcRouter from "./rpc-router";
 import { Store } from "./store";
 import {
@@ -38,7 +37,7 @@ export class RequestHandler {
     readonly provider: BaseProvider,
     readonly wallet: Signer,
     readonly blocksNeededForConfirmation: number,
-    public readonly processQueue: ProcessQueue,
+    readonly lockService: CFCoreTypes.ILockService,
     public readonly log: ILoggerService,
   ) {
     this.log = this.log.newContext("CF-RequestHandler");

@@ -128,7 +128,8 @@ export namespace ProtocolTypes {
    * Centralized locking service (i.e. redis)
    */
   export interface ILockService {
-    acquireLock(lockName: string, callback: (...args: any[]) => any, timeout: number): Promise<any>;
+    acquireLock(lockName: string, timeout?: number): Promise<string>;
+    releaseLock(lockName: string, lockValue: string): Promise<void>;
   }
 
   export enum ErrorType {

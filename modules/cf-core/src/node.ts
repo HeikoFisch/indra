@@ -20,7 +20,6 @@ import { Deferred } from "./deferred";
 import { Opcode, Commitment, ProtocolRunner } from "./machine";
 import { getFreeBalanceAddress, StateChannel, AppInstance } from "./models";
 import { getPrivateKeysGeneratorAndXPubOrThrow, PrivateKeysGetter } from "./private-keys-generator";
-import ProcessQueue from "./process-queue";
 import { RequestHandler } from "./request-handler";
 import RpcRouter from "./rpc-router";
 import {
@@ -71,7 +70,7 @@ export class Node {
     networkContext: NetworkContext,
     nodeConfig: NodeConfig,
     provider: BaseProvider,
-    lockService?: CFCoreTypes.ILockService,
+    lockService: CFCoreTypes.ILockService,
     publicExtendedKey?: string,
     privateKeyGenerator?: CFCoreTypes.IPrivateKeyGenerator,
     blocksNeededForConfirmation?: number,
@@ -92,8 +91,8 @@ export class Node {
       provider,
       networkContext,
       blocksNeededForConfirmation,
-      logger,
       lockService,
+      logger,
     );
 
     return await node.asynchronouslySetupUsingRemoteServices();
@@ -108,8 +107,8 @@ export class Node {
     private readonly provider: BaseProvider,
     public readonly networkContext: NetworkContext,
     public readonly blocksNeededForConfirmation: number = REASONABLE_NUM_BLOCKS_TO_WAIT,
+    private readonly lockService: CFCoreTypes.ILockService,
     public readonly log: ILoggerService = nullLogger,
-    private readonly lockService?: CFCoreTypes.ILockService,
   ) {
     this.log = log.newContext("CF-Node");
     this.networkContext.provider = this.provider;
@@ -134,7 +133,7 @@ export class Node {
       this.provider,
       new AutoNonceWallet(this.signer.privateKey, this.provider),
       this.blocksNeededForConfirmation!,
-      new ProcessQueue(this.lockService),
+      this.lockService,
       this.log,
     );
     this.registerMessagingConnection();
