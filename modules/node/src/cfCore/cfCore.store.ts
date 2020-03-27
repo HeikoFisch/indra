@@ -24,15 +24,17 @@ import { ConfigService } from "../config/config.service";
 import { SetupCommitmentRepository } from "../setupCommitment/setupCommitment.repository";
 
 @Injectable()
-export class CFCoreStore implements IStoreService {
+// TODO:
+// export class CFCoreStore implements IStoreService {
+export class CFCoreStore {
   private schemaVersion: number = STORE_SCHEMA_VERSION;
   constructor(
+    private readonly configService: ConfigService,
     private readonly channelRepository: ChannelRepository,
     private readonly appInstanceRepository: AppInstanceRepository,
     private readonly conditionalTransactionCommitmentRepository: ConditionalTransactionCommitmentRepository,
     private readonly setStateCommitmentRepository: SetStateCommitmentRepository,
     private readonly withdrawCommitmentRepository: WithdrawCommitmentRepository,
-    private readonly configService: ConfigService,
     private readonly setupCommitmentRepository: SetupCommitmentRepository,
   ) {}
 
@@ -60,6 +62,14 @@ export class CFCoreStore implements IStoreService {
     return this.channelRepository.getStateChannelByAppInstanceId(appInstanceId);
   }
 
+  async createStateChannel(stateChannel: StateChannelJSON): Promise<void> {
+    return this.channelRepository.createStateChannel(
+      stateChannel,
+      this.schemaVersion,
+      this.configService.getPublicIdentifier(),
+    );
+  }
+
   async saveStateChannel(stateChannel: StateChannelJSON): Promise<void> {
     let channel = await this.channelRepository.findByMultisigAddress(stateChannel.multisigAddress);
     const setup = await this.setupCommitmentRepository.findByMultisigAddress(
@@ -73,9 +83,9 @@ export class CFCoreStore implements IStoreService {
       channel = new Channel();
       channel.schemaVersion = this.schemaVersion;
       channel.nodePublicIdentifier = this.configService.getPublicIdentifier();
-      channel.userPublicIdentifier = stateChannel.userNeuteredExtendedKeys.filter(
-        xpub => xpub !== this.configService.getPublicIdentifier(),
-      )[0];
+      channel.userPublicIdentifier = stateChannel.userNeuteredExtendedKeys.find(
+        xpub => xpub === this.configService.getPublicIdentifier(),
+      );
       channel.multisigAddress = stateChannel.multisigAddress;
       channel.addresses = stateChannel.addresses;
     }
@@ -111,9 +121,16 @@ export class CFCoreStore implements IStoreService {
     return this.appInstanceRepository.getAppProposal(appInstanceId);
   }
 
-  async saveAppProposal(multisigAddress: string, appProposal: AppInstanceProposal): Promise<void> {
-    const channel = await this.channelRepository.findByMultisigAddressOrThrow(multisigAddress);
-    return this.appInstanceRepository.saveAppProposal(channel, appProposal);
+  async saveAppProposal(
+    multisigAddress: string,
+    appProposal: AppInstanceProposal,
+    monotonicNumProposedApps: number,
+  ): Promise<void> {
+    await this.channelRepository.saveAppProposal(
+      multisigAddress,
+      appProposal,
+      monotonicNumProposedApps,
+    );
   }
 
   async removeAppProposal(multisigAddress: string, appInstanceId: string): Promise<void> {

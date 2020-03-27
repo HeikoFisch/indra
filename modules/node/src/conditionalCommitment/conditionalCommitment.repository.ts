@@ -11,7 +11,7 @@ export const convertConditionalCommitmentToJson = (
     appIdentityHash: commitment.app.identityHash,
     freeBalanceAppIdentityHash: commitment.freeBalanceAppIdentityHash,
     networkContext,
-    signatures: commitment.signatures,
+    signatures: commitment.signatures as any,
     interpreterAddr: commitment.interpreterAddr,
     interpreterParams: commitment.interpreterParams,
     multisigAddress: commitment.multisigAddress,
@@ -64,7 +64,7 @@ export class ConditionalTransactionCommitmentRepository extends Repository<
       commitmentEntity.interpreterAddr = commitment.interpreterAddr;
     }
     commitmentEntity.interpreterParams = commitment.interpreterParams;
-    commitmentEntity.signatures = commitment.signatures;
+    commitmentEntity.signatures = commitment.signatures as any;
     return this.save(commitmentEntity);
   }
 }

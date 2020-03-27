@@ -31,7 +31,7 @@ export const cfCoreProviderFactory: Provider = {
     const { chainId, name: networkName } = await config.getEthNetwork();
     const cfCore = await CFCore.create(
       messaging as IMessagingService, // TODO: FIX
-      store,
+      store as any,
       await config.getContractAddresses(),
       { STORE_KEY_PREFIX: ConnextNodeStorePrefix },
       provider,

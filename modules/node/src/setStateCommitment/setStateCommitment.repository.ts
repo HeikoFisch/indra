@@ -55,7 +55,7 @@ export class SetStateCommitmentRepository extends Repository<SetStateCommitment>
     }
     entity.appStateHash = commitment.appStateHash;
     entity.challengeRegistryAddress = commitment.challengeRegistryAddress;
-    entity.signatures = commitment.signatures;
+    entity.signatures = commitment.signatures as any;
     entity.timeout = commitment.timeout;
     entity.versionNumber = commitment.versionNumber;
     this.save(entity);

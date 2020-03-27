@@ -17,6 +17,7 @@ import { AppInstance } from "../appInstance/appInstance.entity";
 import { SetupCommitment } from "../setupCommitment/setupCommitment.entity";
 import { Withdraw } from "../withdraw/withdraw.entity";
 import { WithdrawCommitment } from "../withdrawCommitment/withdrawCommitment.entity";
+import { FreeBalanceAppInstance } from "../freeBalanceAppInstance/freeBalanceAppInstance.entity";
 
 // Import Migrations
 import { InitNodeRecords1567158660577 } from "../../migrations/1567158660577-init-node-records";
@@ -39,15 +40,17 @@ import { initWithdrawApp1584466373728 } from "../../migrations/1584466373728-ini
 import { cfCoreStoreUpdate1584633495374 } from "../../migrations/1584633495374-cf-core-store-update";
 import { createdUpdated1584722683650 } from "../../migrations/1584722683650-created-updated";
 import { meta1584732939683 } from "../../migrations/1584732939683-meta";
+import { dbOptimizations1584959857727 } from "../../migrations/1584959857727-db-optimizations";
 
 export const entities = [
   AppInstance,
+  AnonymizedOnchainTransaction,
   AppRegistry,
   Channel,
   CFCoreRecord,
+  FreeBalanceAppInstance,
   RebalanceProfile,
   OnchainTransaction,
-  AnonymizedOnchainTransaction,
   ConditionalTransactionCommitment,
   SetStateCommitment,
   SetupCommitment,
@@ -76,6 +79,7 @@ export const migrations = [
   cfCoreStoreUpdate1584633495374,
   createdUpdated1584722683650,
   meta1584732939683,
+  dbOptimizations1584959857727,
 ];
 
 @Injectable()

@@ -1,10 +1,10 @@
 import {
   Entity,
-  PrimaryGeneratedColumn,
   Column,
   ManyToOne,
   CreateDateColumn,
   UpdateDateColumn,
+  PrimaryColumn,
 } from "typeorm";
 import { IsEthAddress, IsKeccak256Hash, IsXpub } from "../util";
 import { OutcomeType } from "@connext/types";
@@ -23,8 +23,9 @@ export enum AppType {
 
 @Entity()
 export class AppInstance<T extends AppStateBigNumber = any> {
-  @PrimaryGeneratedColumn()
-  id!: number;
+  @PrimaryColumn("text", { unique: true })
+  @IsKeccak256Hash()
+  identityHash!: string;
 
   @Column({ type: "enum", enum: AppType })
   type!: AppType;
@@ -41,10 +42,6 @@ export class AppInstance<T extends AppStateBigNumber = any> {
 
   @Column("integer")
   appSeqNo!: number;
-
-  @Column("text", { unique: true })
-  @IsKeccak256Hash()
-  identityHash!: string;
 
   @Column("json")
   initialState!: T;
@@ -64,7 +61,7 @@ export class AppInstance<T extends AppStateBigNumber = any> {
       to: (value: BigNumber): string => value.toString(),
     },
   })
-  initiatorDeposit!: BigNumber;
+  initiatorDeposit!: BigNumber | string;
 
   @Column("text")
   @IsEthAddress()
@@ -87,7 +84,7 @@ export class AppInstance<T extends AppStateBigNumber = any> {
       to: (value: BigNumber): string => value.toString(),
     },
   })
-  responderDeposit!: BigNumber;
+  responderDeposit!: BigNumber | string;
 
   @Column("text")
   @IsEthAddress()

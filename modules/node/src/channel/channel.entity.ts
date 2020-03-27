@@ -5,10 +5,10 @@ import {
   JoinTable,
   ManyToMany,
   OneToMany,
-  PrimaryGeneratedColumn,
   OneToOne,
   CreateDateColumn,
   UpdateDateColumn,
+  PrimaryColumn,
 } from "typeorm";
 
 import { AppInstance } from "../appInstance/appInstance.entity";
@@ -17,11 +17,13 @@ import { RebalanceProfile } from "../rebalanceProfile/rebalanceProfile.entity";
 import { IsEthAddress, IsXpub } from "../util";
 import { WithdrawCommitment } from "../withdrawCommitment/withdrawCommitment.entity";
 import { SetupCommitment } from "../setupCommitment/setupCommitment.entity";
+import { FreeBalanceAppInstance } from "../freeBalanceAppInstance/freeBalanceAppInstance.entity";
 
 @Entity()
 export class Channel {
-  @PrimaryGeneratedColumn()
-  id!: number;
+  @PrimaryColumn("text", { unique: true })
+  @IsEthAddress()
+  multisigAddress!: string;
 
   @Column("integer", { default: 0 })
   schemaVersion!: number;
@@ -37,10 +39,6 @@ export class Channel {
   @Column("text")
   @IsXpub()
   nodePublicIdentifier!: string;
-
-  @Column("text", { unique: true })
-  @IsEthAddress()
-  multisigAddress!: string;
 
   @Column("boolean", { default: false })
   available!: boolean;
@@ -58,21 +56,31 @@ export class Channel {
   @Column("integer", { nullable: true })
   monotonicNumProposedApps!: number;
 
+  @OneToOne(
+    (type: any) => FreeBalanceAppInstance,
+    (fb: FreeBalanceAppInstance) => fb.channel,
+    { cascade: true },
+  )
+  freeBalanceAppInstance!: FreeBalanceAppInstance;
+
   @OneToMany(
     (type: any) => WithdrawCommitment,
     (withdrawalCommitment: WithdrawCommitment) => withdrawalCommitment.channel,
+    { cascade: true },
   )
   withdrawalCommitments!: WithdrawCommitment[];
 
   @OneToOne(
-    (type: any) => WithdrawCommitment,
+    (type: any) => SetupCommitment,
     (commitment: SetupCommitment) => commitment.channel,
+    { cascade: true },
   )
   setupCommitment!: SetupCommitment;
 
   @ManyToMany(
     (type: any) => RebalanceProfile,
     (profile: RebalanceProfile) => profile.channels,
+    { cascade: true },
   )
   @JoinTable()
   rebalanceProfiles!: RebalanceProfile[];

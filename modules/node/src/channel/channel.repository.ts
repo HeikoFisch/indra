@@ -1,7 +1,15 @@
-import { StateChannelJSON } from "@connext/types";
+import {
+  StateChannelJSON,
+  AppInstanceProposal,
+  AppInstanceJson,
+  OutcomeType,
+  convertCoinTransfers,
+} from "@connext/types";
 import { NotFoundException } from "@nestjs/common";
 import { AddressZero } from "ethers/constants";
 import { EntityManager, EntityRepository, Repository } from "typeorm";
+import { xkeyKthAddress } from "@connext/cf-core";
+import { bigNumberify } from "ethers/utils";
 
 import {
   convertAppToInstanceJSON,
@@ -9,9 +17,10 @@ import {
 } from "../appInstance/appInstance.repository";
 import { LoggerService } from "../logger/logger.service";
 import { RebalanceProfile } from "../rebalanceProfile/rebalanceProfile.entity";
+import { AppType, AppInstance } from "../appInstance/appInstance.entity";
+import { FreeBalanceAppInstance } from "../freeBalanceAppInstance/freeBalanceAppInstance.entity";
 
 import { Channel } from "./channel.entity";
-import { AppType } from "../appInstance/appInstance.entity";
 
 const log = new LoggerService("ChannelRepository");
 
@@ -38,8 +47,10 @@ export const convertChannelToJSON = (channel: Channel): StateChannelJSON => {
 
 @EntityRepository(Channel)
 export class ChannelRepository extends Repository<Channel> {
+  // CF-CORE STORE METHODS
   async getStateChannel(multisigAddress: string): Promise<StateChannelJSON | undefined> {
     const channel = await this.findByMultisigAddress(multisigAddress);
+    console.log("channel: ", channel);
     if (!channel) {
       return undefined;
     }
@@ -66,21 +77,211 @@ export class ChannelRepository extends Repository<Channel> {
     return convertChannelToJSON(channel);
   }
 
+  async createStateChannel(
+    stateChannel: StateChannelJSON,
+    schemaVersion: number,
+    nodePublicIdentifier: string,
+  ): Promise<void> {
+    const { multisigAddress, addresses, freeBalanceAppInstance } = stateChannel;
+    const userPublicIdentifier = stateChannel.userNeuteredExtendedKeys.find(
+      xpub => xpub === nodePublicIdentifier,
+    );
+    const channel = await this.createQueryBuilder()
+      .insert()
+      .into(Channel)
+      .values({
+        multisigAddress,
+        schemaVersion,
+        nodePublicIdentifier,
+        userPublicIdentifier,
+        addresses,
+        monotonicNumProposedApps: 0,
+      })
+      .execute();
+    console.log('channel: ', channel);
+   const freeBalance = await this.createQueryBuilder()
+      .insert()
+      .into(FreeBalanceAppInstance)
+      .values({
+        appDefinition: freeBalanceAppInstance.appInterface.addr,
+        appSeqNo: freeBalanceAppInstance.appSeqNo,
+        identityHash: freeBalanceAppInstance.identityHash,
+        initialState: freeBalanceAppInstance.latestState as any,
+        latestState: freeBalanceAppInstance.latestState as any,
+        latestTimeout: freeBalanceAppInstance.latestTimeout,
+        latestVersionNumber: freeBalanceAppInstance.latestVersionNumber,
+        outcomeInterpreterParameters:
+          freeBalanceAppInstance.multiAssetMultiPartyCoinTransferInterpreterParams,
+        stateEncoding: freeBalanceAppInstance.appInterface.stateEncoding,
+      })
+      .execute();
+    console.log('freeBalance: ', freeBalance);
+    const setup = await this.createQueryBuilder()
+      .relation(Channel, "setupCommitment")
+      .of(multisigAddress)
+      .set(multisigAddress);
+    console.log('setup: ', setup);
+    const freeBalChan = await this.createQueryBuilder()
+      .relation(Channel, "freeBalanceAppInstance")
+      .of(multisigAddress)
+      .set(stateChannel.freeBalanceAppInstance.identityHash);
+    console.log('freeBalChan: ', freeBalChan);
+
+    const allChannels = await this.findAll();
+    console.log('allChannels: ', allChannels);
+  }
+
+  async saveAppProposal(
+    multisigAddress: string,
+    appProposal: AppInstanceProposal,
+    monotonicNumProposedApps: number,
+  ): Promise<void> {
+    const {
+      identityHash,
+      abiEncodings: { actionEncoding, stateEncoding },
+      appDefinition,
+      appSeqNo,
+      initialState,
+      initiatorDeposit,
+      initiatorDepositTokenAddress,
+      responderDeposit,
+      responderDepositTokenAddress,
+      timeout,
+      proposedToIdentifier,
+      proposedByIdentifier,
+      outcomeType,
+    } = appProposal;
+
+    await this.createQueryBuilder()
+      .update(Channel)
+      .set({ monotonicNumProposedApps })
+      .execute();
+
+    await this.createQueryBuilder()
+      .insert()
+      .into(AppInstance)
+      .values({
+        identityHash,
+        type: AppType.PROPOSAL,
+        actionEncoding,
+        stateEncoding,
+        initialState: initialState as any,
+        initiatorDeposit,
+        initiatorDepositTokenAddress,
+        appDefinition,
+        appSeqNo,
+        latestState: initialState as any,
+        latestTimeout: parseInt(timeout),
+        latestVersionNumber: 0,
+        responderDeposit,
+        responderDepositTokenAddress,
+        timeout: parseInt(timeout),
+        proposedToIdentifier,
+        proposedByIdentifier,
+        outcomeType,
+      })
+      .execute();
+
+    await this.createQueryBuilder()
+      .relation(Channel, "appInstances")
+      .of(multisigAddress)
+      .add(identityHash);
+  }
+
+  async createAppInstance(
+    multisigAddress: string,
+    appJson: AppInstanceJson,
+    freeBalanceAppInstance: AppInstanceJson,
+  ) {
+    const {
+      identityHash,
+      latestState,
+      latestTimeout,
+      latestVersionNumber,
+      multiAssetMultiPartyCoinTransferInterpreterParams,
+      participants,
+      singleAssetTwoPartyCoinTransferInterpreterParams,
+      twoPartyOutcomeInterpreterParams,
+      appSeqNo,
+      outcomeType,
+    } = appJson;
+
+    // TODO: better way to do this?
+    const channel = await this.findByMultisigAddressOrThrow(multisigAddress);
+    // channel.freeBalanceAppInstance.latestState = freeBalanceAppInstance.latestState;
+    // channel.freeBalanceAppInstance.latestTimeout = freeBalanceAppInstance.latestTimeout;
+    // channel.freeBalanceAppInstance.latestVersionNumber = freeBalanceAppInstance.latestVersionNumber;
+    // // TODO: THIS SHOULD PROB BE DONE UPSTREAM
+    let latestStateFixed = latestState;
+    if (latestState["coinTransfers"]) {
+      if (outcomeType === OutcomeType.SINGLE_ASSET_TWO_PARTY_COIN_TRANSFER) {
+        latestStateFixed["coinTransfers"] = convertCoinTransfers(
+          "bignumber",
+          latestState["coinTransfers"],
+        );
+      }
+    }
+
+    let userAddr = xkeyKthAddress(channel.userPublicIdentifier, appSeqNo);
+    const userParticipantAddress = participants.filter(p => p === userAddr)[0];
+    const nodeParticipantAddress = participants.filter(p => p !== userAddr)[0];
+
+    let outcomeInterpreterParameters;
+    switch (outcomeType) {
+      case OutcomeType.TWO_PARTY_FIXED_OUTCOME:
+        outcomeInterpreterParameters = twoPartyOutcomeInterpreterParams;
+        break;
+
+      case OutcomeType.MULTI_ASSET_MULTI_PARTY_COIN_TRANSFER:
+        outcomeInterpreterParameters = multiAssetMultiPartyCoinTransferInterpreterParams;
+        break;
+
+      case OutcomeType.SINGLE_ASSET_TWO_PARTY_COIN_TRANSFER:
+        outcomeInterpreterParameters = singleAssetTwoPartyCoinTransferInterpreterParams;
+        break;
+
+      default:
+        throw new Error(`Unrecognized outcome type: ${OutcomeType[outcomeType]}`);
+    }
+
+    await this.createQueryBuilder()
+      .update(FreeBalanceAppInstance)
+      .set({
+        latestState: freeBalanceAppInstance.latestState as any,
+        latestTimeout: freeBalanceAppInstance.latestTimeout,
+        latestVersionNumber: freeBalanceAppInstance.latestVersionNumber,
+      })
+      .where("identityHash = :identityHash", { identityHash: freeBalanceAppInstance.identityHash })
+      .update(AppInstance)
+      .set({
+        type: AppType.INSTANCE,
+        userParticipantAddress,
+        nodeParticipantAddress,
+        latestState: latestStateFixed as any,
+        latestTimeout,
+        latestVersionNumber,
+        outcomeInterpreterParameters,
+      })
+      .where("identityHash = :identityHash", { identityHash })
+      .execute();
+  }
+
+  // OTHER METHODS
+
   async findAll(available: boolean = true): Promise<Channel[]> {
     return this.find({ where: { available } });
   }
 
   async findByMultisigAddress(multisigAddress: string): Promise<Channel | undefined> {
-    return this.findOne({
-      where: { multisigAddress },
-      relations: ["appInstances"],
+    return this.findOne(multisigAddress, {
+      relations: ["freeBalanceAppInstance"],
     });
   }
 
   async findByUserPublicIdentifier(userPublicIdentifier: string): Promise<Channel | undefined> {
     return this.findOne({
       where: { userPublicIdentifier },
-      relations: ["appInstances"],
+      relations: ["freeBalanceAppInstance"],
     });
   }
 
@@ -92,9 +293,8 @@ export class ChannelRepository extends Repository<Channel> {
       .leftJoin("channel.appInstances", "appInstance")
       .where("appInstance.identityHash = :appInstanceId", { appInstanceId })
       .getOne();
-    return this.findOne({
-      where: { id: channel.id },
-      relations: ["appInstances"],
+    return this.findOne(channel.multisigAddress, {
+      relations: ["freeBalanceAppInstance"],
     });
   }
 

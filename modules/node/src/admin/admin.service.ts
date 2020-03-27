@@ -100,13 +100,12 @@ export class AdminService implements OnApplicationBootstrap {
     const corrupted = [];
     for (const channel of channels) {
       // try to get the free balance of eth
-      const { id, multisigAddress, userPublicIdentifier: userXpub } = channel;
+      const { multisigAddress, userPublicIdentifier: userXpub } = channel;
       try {
         await this.cfCoreService.getFreeBalance(userXpub, multisigAddress);
       } catch (error) {
         corrupted.push({
           error: error.message,
-          id,
           multisigAddress,
           userXpub,
         });
@@ -133,7 +132,6 @@ export class AdminService implements OnApplicationBootstrap {
       );
       const currPrefix = await this.cfCoreService.getChannelRecord(chan.multisigAddress);
       const mergeInfo = {
-        channelId: chan.id,
         records: { oldPrefix, currPrefix },
         userXpub: chan.userPublicIdentifier,
       };
@@ -276,7 +274,11 @@ export class AdminService implements OnApplicationBootstrap {
           channelJSON.multisigAddress,
         );
         for (const [, proposedApp] of channelJSON.proposedAppInstances || []) {
-          await this.cfCoreStore.saveAppProposal(channelJSON.multisigAddress, proposedApp);
+          await this.cfCoreStore.saveAppProposal(
+            channelJSON.multisigAddress,
+            proposedApp,
+            channelJSON.monotonicNumProposedApps,
+          );
         }
 
         for (const [, appInstance] of channelJSON.appInstances || []) {

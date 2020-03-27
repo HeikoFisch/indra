@@ -105,12 +105,12 @@ export const convertAppToProposedInstanceJSON = (app: AppInstance): AppInstanceP
     appSeqNo: app.appSeqNo,
     identityHash: app.identityHash,
     initialState: app.initialState,
-    initiatorDeposit: app.initiatorDeposit.toHexString(),
+    initiatorDeposit: bigNumberify(app.initiatorDeposit).toHexString(),
     initiatorDepositTokenAddress: app.initiatorDepositTokenAddress,
     outcomeType: app.outcomeType,
     proposedByIdentifier: app.proposedByIdentifier,
     proposedToIdentifier: app.proposedToIdentifier,
-    responderDeposit: app.responderDeposit.toHexString(),
+    responderDeposit: bigNumberify(app.responderDeposit).toHexString(),
     responderDepositTokenAddress: app.responderDepositTokenAddress,
     timeout: bigNumberify(app.timeout).toHexString(),
     multiAssetMultiPartyCoinTransferInterpreterParams,
@@ -122,10 +122,7 @@ export const convertAppToProposedInstanceJSON = (app: AppInstance): AppInstanceP
 @EntityRepository(AppInstance)
 export class AppInstanceRepository extends Repository<AppInstance> {
   findByIdentityHash(identityHash: string): Promise<AppInstance | undefined> {
-    return this.findOne({
-      where: {
-        identityHash,
-      },
+    return this.findOne(identityHash, {
       relations: ["channel"],
     });
   }
